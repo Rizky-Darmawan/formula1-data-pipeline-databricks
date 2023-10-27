@@ -94,6 +94,14 @@ display(spark.sql('SELECT * FROM qualifying LIMIT 10;'))
 
 # COMMAND ----------
 
+display(spark.sql('SELECT * FROM races WHERE date BETWEEN "2016-01-01" AND "2023-12-31" ORDER BY date'))
+
+# COMMAND ----------
+
+display(spark.sql('SELECT * FROM pit_stops ORDER BY milliseconds;'))
+
+# COMMAND ----------
+
 results_df.printSchema()
 
 # COMMAND ----------
@@ -179,6 +187,60 @@ best_and_worst_teams = spark.sql(
 )
 
 display(best_and_worst_teams)
+
+# COMMAND ----------
+
+# GET TEAMS FROM 2016-2023 AND THEIR RESPECTIVE STATISTICS OF THEIR PIT STOPS TIME
+teams_pit_time_2016_2023 = spark.sql(
+    '''
+    WITH filter_races AS (
+        SELECT * FROM races WHERE date BETWEEN "2016-01-01" AND "2023-12-31"
+    ),
+    
+    get_race_date(
+        SELECT
+            a.*,
+            b.date
+        FROM results AS a
+        JOIN filter_races AS b
+        ON a.raceId = b.raceId
+    ),
+    
+    get_constructors_id AS (
+        SELECT
+            a.*,
+            b.constructorId
+        FROM pit_stops AS a
+        JOIN get_race_date AS b
+        ON a.driverId = b.driverId AND a.raceId = b.raceId
+    ),
+
+    count_average_pit_time AS (
+        SELECT 
+            constructorId, 
+            ROUND(AVG(milliseconds) / 1000, 0) AS avgPitTime,
+            ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY milliseconds) / 1000, 0) AS medianPitTime,
+            ROUND(MIN(milliseconds) / 1000, 0) AS fastestPitTime,
+            ROUND(MAX(milliseconds) / 1000, 0) AS longestPitTime
+        FROM get_constructors_id 
+        GROUP BY constructorId
+    )
+
+    SELECT
+        a.constructorId,
+        b.name,
+        b.nationality,
+        a.avgPitTime,
+        a.medianPitTime,
+        a.fastestPitTime,
+        a.longestPitTime
+    FROM count_average_pit_time AS a
+    JOIN constructors AS b
+    ON a.constructorId = b.constructorId
+    '''
+)
+
+display(teams_pit_time_2016_2023)
 
 # COMMAND ----------
 
