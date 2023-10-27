@@ -101,15 +101,15 @@ results_df.printSchema()
 # GET TOP 20 DRIVERS OF ALL TIME IN TERMS OF NUMBER OF WINS AND SHOW THEIR AVERAGE AND MEDIAN QUALIFYING POSITION
 top_20_drivers = spark.sql(
     '''
-    WITH stg1 AS (
+    WITH get_drivers_that_have_won AS (
         SELECT * FROM results WHERE positionOrder = 1
     ),
 
-    stg2 AS (
-        SELECT driverId, COUNT(*) AS winCount FROM stg1 GROUP BY driverId ORDER BY winCount DESC LIMIT 20
+    count_number_of_wins AS (
+        SELECT driverId, COUNT(*) AS winCount FROM get_drivers_that_have_won GROUP BY driverId ORDER BY winCount DESC LIMIT 20
     ),
 
-    stg3 AS (
+    get_details_of_drivers AS (
         SELECT
             a.driverId,
             b.forename,
@@ -117,17 +117,17 @@ top_20_drivers = spark.sql(
             b.dob,
             b.nationality,
             a.winCount 
-        FROM stg2 AS a
+        FROM count_number_of_wins AS a
         JOIN drivers AS b
         ON a.driverId = b.driverId
         ORDER BY a.winCount DESC
     ),
 
-    stg4 AS (
+    get_average_and_median_qualifying_results AS (
         SELECT 
             driverId, 
             ROUND(AVG(position), 0) AS avgPosition,
-            PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY position) AS medianPosition
+            ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY position), 0) AS medianPosition
         FROM qualifying 
         GROUP BY driverId
     )
@@ -136,13 +136,49 @@ top_20_drivers = spark.sql(
         a.*,
         b.avgPosition,
         b.medianPosition
-    FROM stg3 AS a
-    JOIN stg4 AS b
+    FROM get_details_of_drivers AS a
+    JOIN get_average_and_median_qualifying_results AS b
     ON a.driverId = b.driverId;
     '''
 )
 
 display(top_20_drivers)
+
+# COMMAND ----------
+
+# GET TOP 5 BEST TEAMS AND 5 WORST TEAMS (IN TERMS OF AVERAGE GRID POSITION)
+best_and_worst_teams = spark.sql(
+    '''
+    WITH count_average_position AS (
+        SELECT constructorId, ROUND(AVG(position), 0) AS avgPosition FROM qualifying GROUP BY constructorId
+    ),
+    
+    get_5_best_teams AS (
+        SELECT *, 'best' AS flag FROM count_average_position ORDER BY avgPosition LIMIT 5
+    ),
+
+    get_5_worst_teams AS (
+        SELECT *, 'worst' AS flag FROM count_average_position ORDER BY avgPosition DESC LIMIT 5
+    ),
+
+    union_best_and_worst AS (
+        SELECT * FROM get_5_best_teams UNION ALL SELECT * FROM get_5_worst_teams
+    )
+
+    SELECT 
+        a.constructorId,
+        b.name,
+        b.nationality,
+        a.flag,
+        a.avgPosition
+    FROM union_best_and_worst AS a
+    JOIN constructors AS b
+    ON a.constructorId = b.constructorId
+    ORDER BY avgPosition;
+    '''
+)
+
+display(best_and_worst_teams)
 
 # COMMAND ----------
 
