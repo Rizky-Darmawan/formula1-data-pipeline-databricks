@@ -68,44 +68,6 @@ results_df.createOrReplaceTempView('results')
 
 # COMMAND ----------
 
-# TEST QUERYING VIEW
-test = spark.sql(
-    '''
-    WITH stg1 AS (
-        SELECT * FROM constructors
-    )
-    SELECT * FROM stg1 WHERE nationality = "British"
-    '''
-)
-
-display(test)
-
-# COMMAND ----------
-
-display(spark.sql('SELECT * FROM results LIMIT 10;'))
-
-# COMMAND ----------
-
-display(spark.sql('SELECT * FROM drivers LIMIT 10;'))
-
-# COMMAND ----------
-
-display(spark.sql('SELECT * FROM qualifying LIMIT 10;'))
-
-# COMMAND ----------
-
-display(spark.sql('SELECT * FROM races WHERE date BETWEEN "2016-01-01" AND "2023-12-31" ORDER BY date'))
-
-# COMMAND ----------
-
-display(spark.sql('SELECT * FROM pit_stops ORDER BY milliseconds;'))
-
-# COMMAND ----------
-
-results_df.printSchema()
-
-# COMMAND ----------
-
 # GET TOP 20 DRIVERS OF ALL TIME IN TERMS OF NUMBER OF WINS AND SHOW THEIR AVERAGE AND MEDIAN QUALIFYING POSITION
 top_20_drivers = spark.sql(
     '''
@@ -241,6 +203,28 @@ teams_pit_time_2016_2023 = spark.sql(
 )
 
 display(teams_pit_time_2016_2023)
+
+# COMMAND ----------
+
+from pyspark.sql import *
+import pandas as pd
+
+jdbcHostname = "formula1-dwh.database.windows.net"
+jdbcPort = "1433"
+jdbcDatabase = "formula1-dwh"
+properties = {
+ "user" : "formula1",
+ "password" : dbutils.secrets.get(scope="formula1-data-pipeline", key="azure-sql-password") }
+
+url = f"jdbc:sqlserver://{jdbcHostname}:{jdbcPort};database={jdbcDatabase}"
+
+top_20_drivers_write = DataFrameWriter(top_20_drivers)
+best_and_worst_teams_write = DataFrameWriter(best_and_worst_teams)
+teams_pit_time_2016_2023_write = DataFrameWriter(teams_pit_time_2016_2023)
+
+top_20_drivers_write.jdbc(url = url, table = "top_20_drivers", mode ="overwrite", properties = properties)
+best_and_worst_teams_write.jdbc(url = url, table = "best_and_worst_teams", mode ="overwrite", properties = properties)
+teams_pit_time_2016_2023_write.jdbc(url = url, table = "teams_pit_time_2016_2023", mode ="overwrite", properties = properties)
 
 # COMMAND ----------
 
